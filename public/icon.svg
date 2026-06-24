@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#0D0D0D"/>
+  <g fill="#C8FF00">
+    <rect x="96" y="216" width="48" height="80"/>
+    <rect x="368" y="216" width="48" height="80"/>
+    <rect x="144" y="240" width="32" height="32"/>
+    <rect x="336" y="240" width="32" height="32"/>
+    <rect x="176" y="248" width="160" height="16"/>
+  </g>
+  <text x="256" y="400" font-family="Barlow Condensed, sans-serif" font-size="120" font-weight="700" fill="#F2F2F2" text-anchor="middle">SST</text>
+</svg>
