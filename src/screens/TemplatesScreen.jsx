@@ -152,8 +152,8 @@ function TemplateEditor({ templateId, onBack, goTo }) {
         ...template.movements,
         {
           movementId: m.id,
-          targetSets: 4,
-          targetReps: '8-12',
+          targetSets: null,
+          targetReps: '',
           restSeconds: m.defaultRestSeconds ?? 90,
         },
       ],
@@ -238,7 +238,7 @@ function TemplateEditor({ templateId, onBack, goTo }) {
                     {movementName(tm.movementId)}
                   </div>
                   <div className="text-xs text-muted mt-1">
-                    {tm.targetSets} × {tm.targetReps} · {tm.restSeconds}s rest
+                    {tm.targetSets || '–'} × {tm.targetReps || '–'} · {tm.restSeconds}s rest
                   </div>
                 </button>
                 <div className="flex flex-col items-center pr-2">
