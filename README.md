@@ -11,9 +11,9 @@ required. Built to be used in the gym, phone in hand.
 - **Active Workout** — Scoreboard-style set logger with per-set weight/reps,
   a tap-to-complete checkmark that triggers a circular-arc **rest timer** with
   an audible beep (Web Audio). Shows your **last session** for each movement.
-  Add/remove/reorder movements, edit rest and targets, all mid-workout. State is
+  Add/remove/reorder movements and edit rest, all mid-workout. State is
   persisted continuously, so a phone lock or accidental close never loses data.
-- **Templates** — Build reusable workouts (movements, target sets/reps, rest).
+- **Templates** — Build reusable workouts (movements + rest times).
   Start a live workout from any template; editing a template never touches your
   history.
 - **History** — Every completed workout, searchable and filterable by muscle
