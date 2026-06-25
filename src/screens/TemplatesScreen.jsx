@@ -281,7 +281,7 @@ function TemplateEditor({ templateId, onBack, goTo }) {
                       className="num-input w-full h-11 mt-1"
                       value={tm.targetReps ?? ''}
                       onChange={(e) => patchMovement(i, { targetReps: e.target.value })}
-                      placeholder="8-12"
+                      placeholder="–"
                     />
                   </div>
                   <div>
