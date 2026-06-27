@@ -152,8 +152,6 @@ function TemplateEditor({ templateId, onBack, goTo }) {
         ...template.movements,
         {
           movementId: m.id,
-          targetSets: 4,
-          targetReps: '8-12',
           restSeconds: m.defaultRestSeconds ?? 90,
         },
       ],
@@ -237,9 +235,7 @@ function TemplateEditor({ templateId, onBack, goTo }) {
                   <div className="font-display font-bold uppercase text-xl leading-tight mt-1 truncate">
                     {movementName(tm.movementId)}
                   </div>
-                  <div className="text-xs text-muted mt-1">
-                    {tm.targetSets} × {tm.targetReps} · {tm.restSeconds}s rest
-                  </div>
+                  <div className="text-xs text-muted mt-1">{tm.restSeconds}s rest</div>
                 </button>
                 <div className="flex flex-col items-center pr-2">
                   <button
@@ -262,28 +258,7 @@ function TemplateEditor({ templateId, onBack, goTo }) {
               </div>
 
               {editIndex === i && (
-                <div className="border-t border-surface2 p-4 grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-[10px] uppercase tracking-wide text-muted">Sets</label>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      className="num-input w-full h-11 mt-1"
-                      value={tm.targetSets ?? ''}
-                      onChange={(e) =>
-                        patchMovement(i, { targetSets: e.target.value === '' ? null : Number(e.target.value) })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] uppercase tracking-wide text-muted">Reps</label>
-                    <input
-                      className="num-input w-full h-11 mt-1"
-                      value={tm.targetReps ?? ''}
-                      onChange={(e) => patchMovement(i, { targetReps: e.target.value })}
-                      placeholder="8-12"
-                    />
-                  </div>
+                <div className="border-t border-surface2 p-4 space-y-3">
                   <div>
                     <label className="text-[10px] uppercase tracking-wide text-muted">Rest (s)</label>
                     <input
@@ -295,7 +270,7 @@ function TemplateEditor({ templateId, onBack, goTo }) {
                     />
                   </div>
                   <button
-                    className="col-span-3 btn-ghost text-danger mt-1"
+                    className="btn-ghost text-danger w-full"
                     onClick={() => removeMovement(i)}
                   >
                     <TrashIcon width={16} height={16} />

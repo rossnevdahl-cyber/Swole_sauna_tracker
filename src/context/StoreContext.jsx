@@ -101,8 +101,6 @@ export function StoreProvider({ children }) {
       movementName: movement.name,
       muscleGroup: movement.muscleGroup,
       restSeconds: opts.restSeconds ?? movement.defaultRestSeconds ?? 90,
-      targetSets: opts.targetSets ?? null,
-      targetReps: opts.targetReps ?? '',
       sets: [],
     }
   }
@@ -117,8 +115,6 @@ export function StoreProvider({ children }) {
           movementName: mv.name,
           muscleGroup: mv.muscleGroup,
           restSeconds: tm.restSeconds ?? mv.defaultRestSeconds ?? 90,
-          targetSets: tm.targetSets ?? null,
-          targetReps: tm.targetReps ?? '',
           sets: [],
         }
       })
@@ -154,8 +150,6 @@ export function StoreProvider({ children }) {
       movementName: mv.movementName,
       muscleGroup: mv.muscleGroup,
       restSeconds: mv.restSeconds ?? 90,
-      targetSets: mv.sets ? mv.sets.length : null,
-      targetReps: mv.targetReps ?? '',
       sets: [],
     }))
     const w = {
@@ -265,7 +259,6 @@ export function StoreProvider({ children }) {
           movementName: m.movementName,
           muscleGroup: m.muscleGroup,
           restSeconds: m.restSeconds,
-          targetReps: m.targetReps,
           sets: m.sets
             .filter((s) => s.weight !== '' || s.reps !== '')
             .map((s) => ({

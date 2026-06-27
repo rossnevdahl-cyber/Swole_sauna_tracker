@@ -288,7 +288,7 @@ function WorkoutDetail({ workoutId, onBack, goTo, unit }) {
         open={confirmRepeat}
         onClose={() => setConfirmRepeat(false)}
         title="Repeat Workout?"
-        message="Starts a new active workout with the same movements and targets, but blank set logs."
+        message="Starts a new active workout with the same movements, but blank set logs."
         confirmLabel="Start"
         onConfirm={doRepeat}
       />

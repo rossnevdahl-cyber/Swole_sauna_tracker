@@ -231,7 +231,6 @@ function MovementCard({
   onMoveDown,
 }) {
   const [editingRest, setEditingRest] = useState(false)
-  const [editingTarget, setEditingTarget] = useState(false)
 
   const lastLabel = last
     ? `Last: ${last.movement.sets.length}×${mostCommonReps(last.movement.sets)} @ ${lbsToDisplay(
@@ -290,37 +289,6 @@ function MovementCard({
           ) : (
             <button className="text-muted active:text-ink" onClick={() => setEditingRest(true)}>
               Rest: <span className="text-ink font-semibold">{mv.restSeconds}s</span>
-            </button>
-          )}
-
-          {/* Target */}
-          {editingTarget ? (
-            <div className="flex items-center gap-1">
-              <input
-                type="number"
-                inputMode="numeric"
-                className="num-input w-12 h-8 text-sm"
-                placeholder="sets"
-                value={mv.targetSets ?? ''}
-                onChange={(e) =>
-                  onPatchMovement({ targetSets: e.target.value === '' ? null : Number(e.target.value) })
-                }
-              />
-              <span className="text-muted">×</span>
-              <input
-                className="num-input w-16 h-8 text-sm"
-                placeholder="reps"
-                value={mv.targetReps ?? ''}
-                onChange={(e) => onPatchMovement({ targetReps: e.target.value })}
-                onBlur={() => setEditingTarget(false)}
-              />
-            </div>
-          ) : (
-            <button className="text-muted active:text-ink" onClick={() => setEditingTarget(true)}>
-              Target:{' '}
-              <span className="text-ink font-semibold">
-                {mv.targetSets || '–'} × {mv.targetReps || '–'}
-              </span>
             </button>
           )}
 
