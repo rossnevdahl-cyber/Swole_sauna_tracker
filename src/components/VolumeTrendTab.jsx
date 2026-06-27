@@ -112,15 +112,19 @@ export default function VolumeTrendTab() {
                     )
                   }
                   const min = hypertrophyTargets[g]?.min ?? 0
+                  const max = hypertrophyTargets[g]?.max ?? 0
                   const actual = counts[`${startMs}_${g}`] || 0
-                  const ok = actual >= min
+                  // Red: below min. Green: at/above min but below max. Blue: at/above max.
+                  let bg = '#FF3B30'
+                  if (actual >= max) bg = '#3B82F6'
+                  else if (actual >= min) bg = '#22C55E'
                   return (
                     <td
                       key={g}
                       className="w-14 px-1 py-2 text-center text-xs text-white"
                       style={{
                         border: '1px solid #2A2A2A',
-                        background: ok ? '#22C55E' : '#FF3B30',
+                        background: bg,
                       }}
                     >
                       {actual}/{min}
