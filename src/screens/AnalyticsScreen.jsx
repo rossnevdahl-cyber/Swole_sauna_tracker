@@ -13,6 +13,7 @@ import {
   fmtNum,
 } from '../lib/utils.js'
 import { ChevronLeftIcon, ChevronRightIcon, SearchIcon } from '../components/icons.jsx'
+import VolumeTrendTab from '../components/VolumeTrendTab.jsx'
 
 export default function AnalyticsScreen() {
   const [subtab, setSubtab] = useState('weekly')
@@ -23,11 +24,16 @@ export default function AnalyticsScreen() {
         <TabBtn active={subtab === 'weekly'} onClick={() => setSubtab('weekly')}>
           Weekly Volume
         </TabBtn>
+        <TabBtn active={subtab === 'trend'} onClick={() => setSubtab('trend')}>
+          Volume Trend
+        </TabBtn>
         <TabBtn active={subtab === 'movement'} onClick={() => setSubtab('movement')}>
           By Movement
         </TabBtn>
       </div>
-      {subtab === 'weekly' ? <WeeklyVolume /> : <MovementAnalytics />}
+      {subtab === 'weekly' && <WeeklyVolume />}
+      {subtab === 'trend' && <VolumeTrendTab />}
+      {subtab === 'movement' && <MovementAnalytics />}
     </div>
   )
 }
