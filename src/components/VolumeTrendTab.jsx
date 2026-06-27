@@ -30,15 +30,15 @@ function fmtWeekLabel(d) {
 export default function VolumeTrendTab() {
   const { workouts, hypertrophyTargets } = useStore()
 
-  // Reverse-chronological list of week start dates across the prep cycle.
+  // Chronological list of week start dates across the prep cycle (oldest first).
   const weeks = useMemo(() => {
     const first = startOfWeek(PREP_START)
     const last = startOfWeek(PREP_END)
     const list = []
-    const cur = new Date(last)
-    while (cur >= first) {
+    const cur = new Date(first)
+    while (cur <= last) {
       list.push(new Date(cur))
-      cur.setDate(cur.getDate() - 7)
+      cur.setDate(cur.getDate() + 7)
     }
     return list
   }, [])
