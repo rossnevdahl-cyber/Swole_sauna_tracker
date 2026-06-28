@@ -5,6 +5,7 @@ import {
   DEFAULT_SETTINGS,
   SEED_MOVEMENTS,
   MUSCLE_GROUPS,
+  buildDefaultWeightTargets,
   uuid,
   load,
   save,
@@ -43,6 +44,11 @@ export function StoreProvider({ children }) {
     ...load(KEYS.settings, {}),
   }))
   const [activeWorkout, setActiveWorkout] = useState(() => load(KEYS.activeWorkout, null))
+  const [weeklyWeighIns, setWeeklyWeighIns] = useState(() => load(KEYS.weeklyWeighIns, {}))
+  const [weightTargets, setWeightTargets] = useState(() => {
+    const existing = load(KEYS.weightTargets, null)
+    return existing || buildDefaultWeightTargets()
+  })
 
   // Persist on change.
   useEffect(() => save(KEYS.movements, movements), [movements])
@@ -54,6 +60,8 @@ export function StoreProvider({ children }) {
     if (activeWorkout) save(KEYS.activeWorkout, activeWorkout)
     else remove(KEYS.activeWorkout)
   }, [activeWorkout])
+  useEffect(() => save(KEYS.weeklyWeighIns, weeklyWeighIns), [weeklyWeighIns])
+  useEffect(() => save(KEYS.weightTargets, weightTargets), [weightTargets])
 
   // ---------- Movements ----------
   function createMovement({ name, muscleGroup, defaultRestSeconds }) {
@@ -299,6 +307,31 @@ export function StoreProvider({ children }) {
     }))
   }
 
+  // ---------- Weight Trend ----------
+  function setWeighIn(dateStr, value) {
+    const n = Number(value)
+    setWeeklyWeighIns((prev) => {
+      if (value === '' || value === null || value === undefined || Number.isNaN(n)) {
+        // Clearing a weigh-in removes the key entirely.
+        if (!(dateStr in prev)) return prev
+        const next = { ...prev }
+        delete next[dateStr]
+        return next
+      }
+      return { ...prev, [dateStr]: n }
+    })
+  }
+
+  function setWeightTarget(dateStr, value) {
+    const n = Number(value)
+    if (value === '' || value === null || value === undefined || Number.isNaN(n)) return
+    setWeightTargets((prev) => ({ ...prev, [dateStr]: n }))
+  }
+
+  function resetWeightTargets() {
+    setWeightTargets(buildDefaultWeightTargets())
+  }
+
   // ---------- Data management ----------
   function exportData() {
     return {
@@ -342,6 +375,8 @@ export function StoreProvider({ children }) {
     hypertrophyTargets,
     settings,
     activeWorkout,
+    weeklyWeighIns,
+    weightTargets,
     muscleGroups: MUSCLE_GROUPS,
     // movements
     createMovement,
@@ -371,6 +406,10 @@ export function StoreProvider({ children }) {
     // settings
     updateSettings,
     updateTarget,
+    // weight trend
+    setWeighIn,
+    setWeightTarget,
+    resetWeightTargets,
     // data
     exportData,
     importData,

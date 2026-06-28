@@ -73,6 +73,28 @@ export function fmtWeekRange(date) {
   return `${MON[s.getMonth()]} ${s.getDate()} – ${MON[e.getMonth()]} ${e.getDate()}`
 }
 
+// Parse a 'YYYY-MM-DD' string into a Date at local midnight (avoids the UTC
+// shift that `new Date('2026-07-06')` would introduce).
+export function parseYMD(s) {
+  const [y, m, d] = s.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
+// Format a Date as a local 'YYYY-MM-DD' string.
+export function toYMD(date) {
+  const d = new Date(date)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+// 'Mon Jul 6' from a 'YYYY-MM-DD' Monday string.
+export function fmtWeekLabel(ymd) {
+  const d = parseYMD(ymd)
+  return `${DOW[d.getDay()]} ${MON[d.getMonth()]} ${d.getDate()}`
+}
+
 export function fmtClock(totalSeconds) {
   const s = Math.max(0, Math.floor(totalSeconds))
   const h = Math.floor(s / 3600)

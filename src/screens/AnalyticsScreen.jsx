@@ -14,6 +14,7 @@ import {
 } from '../lib/utils.js'
 import { ChevronLeftIcon, ChevronRightIcon, SearchIcon } from '../components/icons.jsx'
 import VolumeTrendTab from '../components/VolumeTrendTab.jsx'
+import WeightTrendTab from '../components/WeightTrendTab.jsx'
 
 export default function AnalyticsScreen() {
   const [subtab, setSubtab] = useState('weekly')
@@ -30,10 +31,14 @@ export default function AnalyticsScreen() {
         <TabBtn active={subtab === 'movement'} onClick={() => setSubtab('movement')}>
           By Movement
         </TabBtn>
+        <TabBtn active={subtab === 'weight'} onClick={() => setSubtab('weight')}>
+          Weight Trend
+        </TabBtn>
       </div>
       {subtab === 'weekly' && <WeeklyVolume />}
       {subtab === 'trend' && <VolumeTrendTab />}
       {subtab === 'movement' && <MovementAnalytics />}
+      {subtab === 'weight' && <WeightTrendTab />}
     </div>
   )
 }
