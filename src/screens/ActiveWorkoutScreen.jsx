@@ -233,10 +233,9 @@ function MovementCard({
   const [editingRest, setEditingRest] = useState(false)
 
   const lastLabel = last
-    ? `Last: ${last.movement.sets.length}×${mostCommonReps(last.movement.sets)} @ ${lbsToDisplay(
-        topWeight(last.movement.sets),
-        unit
-      )} ${unitLabel(unit)}`
+    ? `Last: ${last.movement.sets
+        .map((s) => `${s.reps} @ ${lbsToDisplay(s.weight, unit)}`)
+        .join(', ')} ${unitLabel(unit)}`
     : 'First time'
 
   return (
