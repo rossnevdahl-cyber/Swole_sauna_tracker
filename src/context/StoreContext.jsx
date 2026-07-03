@@ -49,6 +49,9 @@ export function StoreProvider({ children }) {
     const existing = load(KEYS.weightTargets, null)
     return existing || buildDefaultWeightTargets()
   })
+  const [weeklyNutritionCompliance, setWeeklyNutritionCompliance] = useState(() =>
+    load(KEYS.weeklyNutritionCompliance, {})
+  )
 
   // Persist on change.
   useEffect(() => save(KEYS.movements, movements), [movements])
@@ -62,6 +65,10 @@ export function StoreProvider({ children }) {
   }, [activeWorkout])
   useEffect(() => save(KEYS.weeklyWeighIns, weeklyWeighIns), [weeklyWeighIns])
   useEffect(() => save(KEYS.weightTargets, weightTargets), [weightTargets])
+  useEffect(
+    () => save(KEYS.weeklyNutritionCompliance, weeklyNutritionCompliance),
+    [weeklyNutritionCompliance]
+  )
 
   // ---------- Movements ----------
   function createMovement({ name, muscleGroup, defaultRestSeconds }) {
@@ -332,6 +339,25 @@ export function StoreProvider({ children }) {
     setWeightTargets(buildDefaultWeightTargets())
   }
 
+  // field is 'calorieDays' or 'proteinDays'. Empty clears just that field; when
+  // both fields are cleared the week's entry is removed entirely.
+  function setNutritionDays(dateStr, field, value) {
+    setWeeklyNutritionCompliance((prev) => {
+      const entry = { ...(prev[dateStr] || {}) }
+      if (value === '' || value === null || value === undefined) {
+        delete entry[field]
+      } else {
+        let n = Math.round(Number(value))
+        if (Number.isNaN(n)) return prev
+        entry[field] = Math.max(0, Math.min(7, n))
+      }
+      const next = { ...prev }
+      if (entry.calorieDays == null && entry.proteinDays == null) delete next[dateStr]
+      else next[dateStr] = entry
+      return next
+    })
+  }
+
   // ---------- Data management ----------
   function exportData() {
     return {
@@ -377,6 +403,7 @@ export function StoreProvider({ children }) {
     activeWorkout,
     weeklyWeighIns,
     weightTargets,
+    weeklyNutritionCompliance,
     muscleGroups: MUSCLE_GROUPS,
     // movements
     createMovement,
@@ -410,6 +437,7 @@ export function StoreProvider({ children }) {
     setWeighIn,
     setWeightTarget,
     resetWeightTargets,
+    setNutritionDays,
     // data
     exportData,
     importData,

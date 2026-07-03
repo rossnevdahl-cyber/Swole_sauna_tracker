@@ -17,11 +17,37 @@ const PAD_TOP = 30
 const PAD_BOTTOM = 46
 const PLOT_H = H - PAD_TOP - PAD_BOTTOM
 
+// Nutrition compliance bar section, stacked below the weight chart and sharing
+// its x-axis. Bars grow up from a baseline; 0–7 days maps to 0–NUT_BAR_MAX.
+const NUT_GAP_TOP = 16 // space below the section divider
+const NUT_BAR_MAX = 56
+const NUT_PAD_BOTTOM = 14
+const NUT_H = NUT_GAP_TOP + NUT_BAR_MAX + NUT_PAD_BOTTOM
+const NUT_BASE = H + NUT_GAP_TOP + NUT_BAR_MAX // baseline y for the bars
+const SVG_H = H + NUT_H
+const NUT_BAR_W = 7 // each of the two per-week bars
+
+// Green / yellow / red compliance scale (shared by table cells and bars).
+function nutColor(v) {
+  if (v == null) return undefined
+  if (v >= 6) return '#22C55E'
+  if (v >= 4) return '#EAB308'
+  return '#FF3B30'
+}
+
 export default function WeightTrendTab() {
-  const { weeklyWeighIns, weightTargets, setWeighIn, setWeightTarget, resetWeightTargets } =
-    useStore()
+  const {
+    weeklyWeighIns,
+    weightTargets,
+    weeklyNutritionCompliance,
+    setWeighIn,
+    setWeightTarget,
+    resetWeightTargets,
+    setNutritionDays,
+  } = useStore()
 
   const hasWeighIns = Object.keys(weeklyWeighIns).length > 0
+  const hasNutrition = Object.keys(weeklyNutritionCompliance).length > 0
 
   // Pre-compute the full chart data array once per data change (perf note).
   const chart = useMemo(() => {
@@ -29,7 +55,10 @@ export default function WeightTrendTab() {
       const target = weightTargets[w.date] ?? w.target
       const raw = weeklyWeighIns[w.date]
       const actual = typeof raw === 'number' ? raw : null
-      return { date: w.date, phaseKey: w.phaseKey, target, actual }
+      const nut = weeklyNutritionCompliance[w.date] || null
+      const cals = nut && typeof nut.calorieDays === 'number' ? nut.calorieDays : null
+      const protein = nut && typeof nut.proteinDays === 'number' ? nut.proteinDays : null
+      return { date: w.date, phaseKey: w.phaseKey, target, actual, cals, protein }
     })
 
     // Y range: auto-fit with ~5lb padding, snapped to 5lb increments.
@@ -126,27 +155,39 @@ export default function WeightTrendTab() {
       monthLabels,
       showX,
     }
-  }, [weeklyWeighIns, weightTargets])
+  }, [weeklyWeighIns, weightTargets, weeklyNutritionCompliance])
 
   return (
     <div>
-      <Chart chart={chart} />
+      <Chart chart={chart} hasNutrition={hasNutrition} />
       <TargetsTable
         chart={chart}
         hasWeighIns={hasWeighIns}
         setWeighIn={setWeighIn}
         setWeightTarget={setWeightTarget}
         resetWeightTargets={resetWeightTargets}
+        setNutritionDays={setNutritionDays}
       />
     </div>
   )
 }
 
-function Chart({ chart }) {
+function Chart({ chart, hasNutrition }) {
   const scrollRef = useRef(null)
   const [tip, setTip] = useState(null) // selected actual dot
-  const { ticks, width, x, y, targetPoints, actualRuns, actualDots, bands, monthLabels, showX } =
-    chart
+  const {
+    weeks,
+    ticks,
+    width,
+    x,
+    y,
+    targetPoints,
+    actualRuns,
+    actualDots,
+    bands,
+    monthLabels,
+    showX,
+  } = chart
 
   // Default scroll: show the most recent ~12 weeks up to today (or the start of
   // the cycle if today precedes it).
@@ -165,13 +206,13 @@ function Chart({ chart }) {
   }, [])
 
   return (
-    <div className="card mb-5 p-0 overflow-hidden">
+    <div className="card mb-5 p-0 overflow-hidden relative">
       <div className="flex">
         {/* Fixed Y-axis */}
         <svg
           width={AXIS_W}
-          height={H}
-          viewBox={`0 0 ${AXIS_W} ${H}`}
+          height={SVG_H}
+          viewBox={`0 0 ${AXIS_W} ${SVG_H}`}
           className="shrink-0"
           style={{ background: '#1A1A1A' }}
         >
@@ -194,8 +235,8 @@ function Chart({ chart }) {
         <div ref={scrollRef} className="overflow-x-auto no-scrollbar flex-1">
           <svg
             width={width}
-            height={H}
-            viewBox={`0 0 ${width} ${H}`}
+            height={SVG_H}
+            viewBox={`0 0 ${width} ${SVG_H}`}
             onClick={() => setTip(null)}
           >
             {/* Phase bands */}
@@ -335,9 +376,58 @@ function Chart({ chart }) {
                 })()}
               </g>
             )}
+
+            {/* Section divider between weight chart and nutrition bars */}
+            <line x1={0} x2={width} y1={H} y2={H} stroke="#2A2A2A" strokeWidth="1" />
+
+            {/* Nutrition compliance baseline */}
+            <line x1={0} x2={width} y1={NUT_BASE} y2={NUT_BASE} stroke="#2A2A2A" strokeWidth="1" />
+
+            {/* Weekly compliance bars: left = calories, right = protein */}
+            {weeks.map((w, i) => {
+              const cx = x(i)
+              const bars = []
+              if (w.cals != null) {
+                const h = Math.max(2, (w.cals / 7) * NUT_BAR_MAX)
+                bars.push(
+                  <rect
+                    key="c"
+                    x={cx - NUT_BAR_W - 1}
+                    y={NUT_BASE - h}
+                    width={NUT_BAR_W}
+                    height={h}
+                    fill={nutColor(w.cals)}
+                  />
+                )
+              }
+              if (w.protein != null) {
+                const h = Math.max(2, (w.protein / 7) * NUT_BAR_MAX)
+                bars.push(
+                  <rect
+                    key="p"
+                    x={cx + 1}
+                    y={NUT_BASE - h}
+                    width={NUT_BAR_W}
+                    height={h}
+                    fill={nutColor(w.protein)}
+                  />
+                )
+              }
+              return bars.length ? <g key={w.date}>{bars}</g> : null
+            })}
           </svg>
         </div>
       </div>
+
+      {/* Empty-state prompt overlaid on the nutrition band */}
+      {!hasNutrition && (
+        <div
+          className="absolute left-0 right-0 flex items-center justify-center px-6 text-center text-xs text-muted pointer-events-none"
+          style={{ top: H, height: NUT_H }}
+        >
+          Tap a week's Cals or Pro cell in the table to log compliance.
+        </div>
+      )}
 
       {/* Legend */}
       <div className="flex items-center gap-4 px-4 py-2.5 border-t border-surface2 text-[11px] text-muted">
@@ -352,11 +442,43 @@ function Chart({ chart }) {
           Show Day
         </span>
       </div>
+
+      {/* Nutrition compliance legend. Bars are colored by the compliance scale
+          (green ≥6 / yellow 4–5 / red ≤3); left bar is calories, right is protein. */}
+      <div
+        className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 pb-2.5 text-xs text-muted"
+        style={{ fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: '0.03em' }}
+      >
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-1.5 h-3 bg-muted" /> Calories (left)
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-1.5 h-3 bg-muted" /> Protein (right)
+        </span>
+        <span className="flex items-center gap-2 text-[11px]">
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-2 h-2" style={{ background: '#22C55E' }} />6–7
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-2 h-2" style={{ background: '#EAB308' }} />4–5
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-2 h-2" style={{ background: '#FF3B30' }} />0–3
+          </span>
+        </span>
+      </div>
     </div>
   )
 }
 
-function TargetsTable({ chart, hasWeighIns, setWeighIn, setWeightTarget, resetWeightTargets }) {
+function TargetsTable({
+  chart,
+  hasWeighIns,
+  setWeighIn,
+  setWeightTarget,
+  resetWeightTargets,
+  setNutritionDays,
+}) {
   const [editing, setEditing] = useState(null) // { date, field }
   const [draft, setDraft] = useState('')
   const [confirmReset, setConfirmReset] = useState(false)
@@ -384,8 +506,11 @@ function TargetsTable({ chart, hasWeighIns, setWeighIn, setWeightTarget, resetWe
 
   function commit() {
     if (!editing) return
-    if (editing.field === 'actual') setWeighIn(editing.date, draft.trim())
-    else setWeightTarget(editing.date, draft.trim())
+    const v = draft.trim()
+    if (editing.field === 'actual') setWeighIn(editing.date, v)
+    else if (editing.field === 'target') setWeightTarget(editing.date, v)
+    else if (editing.field === 'cals') setNutritionDays(editing.date, 'calorieDays', v)
+    else if (editing.field === 'protein') setNutritionDays(editing.date, 'proteinDays', v)
     setEditing(null)
     setDraft('')
   }
@@ -425,16 +550,21 @@ function TargetsTable({ chart, hasWeighIns, setWeighIn, setWeightTarget, resetWe
 
       {!hasWeighIns && (
         <p className="text-xs text-muted mb-2">
-          Tap any cell in the Actual column to log your first weigh-in.
+          Tap any cell in the Actual column to log your weekly weigh-in, or the Cals/Pro columns to
+          log nutrition compliance.
         </p>
       )}
 
       <div className="card p-0 overflow-hidden">
+        <div className="overflow-x-auto no-scrollbar">
+        <div className="min-w-max">
         <div className="flex text-[10px] uppercase tracking-wide text-muted px-3 py-2 bg-surface2">
-          <span className="flex-1">Week</span>
-          <span className="w-20 text-right">Target</span>
-          <span className="w-20 text-right">Actual</span>
-          <span className="w-16 text-right">Diff</span>
+          <span className="w-24">Week</span>
+          <span className="w-16 text-right">Target</span>
+          <span className="w-16 text-right">Actual</span>
+          <span className="w-14 text-right">Cals</span>
+          <span className="w-14 text-right">Pro</span>
+          <span className="w-14 text-right">Diff</span>
         </div>
 
         {rows.map((row) => {
@@ -462,13 +592,13 @@ function TargetsTable({ chart, hasWeighIns, setWeighIn, setWeightTarget, resetWe
                 isToday ? 'bg-surface2/40' : ''
               }`}
             >
-              <span className="flex-1">
+              <span className="w-24">
                 {isToday && <span className="text-accent mr-1">●</span>}
                 {fmtWeekLabel(row.date)}
               </span>
 
               {/* Target (editable) */}
-              <span className="w-20 text-right">
+              <span className="w-16 text-right">
                 {editing && editing.date === row.date && editing.field === 'target' ? (
                   <input
                     autoFocus
@@ -478,12 +608,12 @@ function TargetsTable({ chart, hasWeighIns, setWeighIn, setWeightTarget, resetWe
                     onChange={(e) => setDraft(e.target.value)}
                     onBlur={commit}
                     onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-                    className="num-input w-16 h-9 px-1 text-right"
+                    className="num-input w-14 h-9 px-1 text-right"
                   />
                 ) : (
                   <button
                     onClick={() => startEdit(row.date, 'target', target)}
-                    className="w-16 h-9 text-right text-muted active:text-ink"
+                    className="w-14 h-9 text-right text-muted active:text-ink"
                   >
                     {target.toFixed(1)}
                   </button>
@@ -491,7 +621,7 @@ function TargetsTable({ chart, hasWeighIns, setWeighIn, setWeightTarget, resetWe
               </span>
 
               {/* Actual (editable) */}
-              <span className="w-20 text-right">
+              <span className="w-16 text-right">
                 {editing && editing.date === row.date && editing.field === 'actual' ? (
                   <input
                     autoFocus
@@ -501,26 +631,80 @@ function TargetsTable({ chart, hasWeighIns, setWeighIn, setWeightTarget, resetWe
                     onChange={(e) => setDraft(e.target.value)}
                     onBlur={commit}
                     onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-                    className="num-input w-16 h-9 px-1 text-right"
+                    className="num-input w-14 h-9 px-1 text-right"
                   />
                 ) : (
                   <button
                     onClick={() => startEdit(row.date, 'actual', actual)}
-                    className={`w-16 h-9 text-right ${actual == null ? 'text-muted/40' : 'text-ink font-semibold'}`}
+                    className={`w-14 h-9 text-right ${actual == null ? 'text-muted/40' : 'text-ink font-semibold'}`}
                   >
                     {actual == null ? '—' : actual.toFixed(1)}
                   </button>
                 )}
               </span>
 
+              {/* Cals (editable, 0–7) */}
+              <NutCell
+                value={row.cals}
+                editing={editing && editing.date === row.date && editing.field === 'cals'}
+                draft={draft}
+                setDraft={setDraft}
+                commit={commit}
+                onStart={() => startEdit(row.date, 'cals', row.cals)}
+              />
+
+              {/* Pro (editable, 0–7) */}
+              <NutCell
+                value={row.protein}
+                editing={editing && editing.date === row.date && editing.field === 'protein'}
+                draft={draft}
+                setDraft={setDraft}
+                commit={commit}
+                onStart={() => startEdit(row.date, 'protein', row.protein)}
+              />
+
               {/* Diff */}
-              <span className="w-16 text-right font-semibold" style={{ color: diff?.color }}>
+              <span className="w-14 text-right font-semibold" style={{ color: diff?.color }}>
                 {diff ? diff.text : ''}
               </span>
             </div>
           )
         })}
+        </div>
+        </div>
       </div>
     </div>
+  )
+}
+
+// A compact editable nutrition-compliance cell (0–7 days), shown as `n/7` and
+// colored by the shared compliance scale. Blank when nothing is logged.
+function NutCell({ value, editing, draft, setDraft, commit, onStart }) {
+  return (
+    <span className="w-14 text-right">
+      {editing ? (
+        <input
+          autoFocus
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={7}
+          step={1}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+          className="num-input w-12 h-9 px-1 text-right"
+        />
+      ) : (
+        <button
+          onClick={onStart}
+          className={`w-12 h-9 text-right ${value == null ? 'text-muted/40' : 'font-semibold'}`}
+          style={value == null ? undefined : { color: nutColor(value) }}
+        >
+          {value == null ? '—' : `${value}/7`}
+        </button>
+      )}
+    </span>
   )
 }

@@ -9,6 +9,7 @@ export const KEYS = {
   // Weight Trend feature — spec-defined key names.
   weeklyWeighIns: 'weeklyWeighIns',
   weightTargets: 'weightTargets',
+  weeklyNutritionCompliance: 'weeklyNutritionCompliance',
 }
 
 export const MUSCLE_GROUPS = [
