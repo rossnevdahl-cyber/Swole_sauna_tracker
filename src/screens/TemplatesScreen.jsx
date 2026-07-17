@@ -295,11 +295,10 @@ function TemplateEditor({ templateId, onBack, goTo }) {
                     />
                   </div>
                   <button
-                    className="col-span-3 btn-ghost text-danger mt-1"
+                    className="col-span-3 justify-self-end text-xs text-danger/80 active:text-danger"
                     onClick={() => removeMovement(i)}
                   >
-                    <TrashIcon width={16} height={16} />
-                    <span className="ml-2">Remove Movement</span>
+                    Remove
                   </button>
                 </div>
               )}
