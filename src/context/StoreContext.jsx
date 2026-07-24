@@ -5,14 +5,32 @@ import {
   DEFAULT_SETTINGS,
   SEED_MOVEMENTS,
   MUSCLE_GROUPS,
-  buildDefaultWeightTargets,
+  DEFAULT_WEIGHT_PHASES,
+  DEFAULT_PLAN_START_WEIGHT,
+  PHASE_COLORS,
   uuid,
   load,
   save,
   remove,
 } from '../lib/storage.js'
+import { startOfWeek, parseYMD, toYMD } from '../lib/utils.js'
 
 const StoreContext = createContext(null)
+
+// Monday (YYYY-MM-DD) date helpers for seeding new phases.
+function todayYMD() {
+  return toYMD(startOfWeek(new Date()))
+}
+function mondayAfter(ymd) {
+  const d = startOfWeek(parseYMD(ymd))
+  d.setDate(d.getDate() + 7)
+  return toYMD(d)
+}
+function addDaysYMD(ymd, days) {
+  const d = parseYMD(ymd)
+  d.setDate(d.getDate() + days)
+  return toYMD(d)
+}
 
 export function useStore() {
   const ctx = useContext(StoreContext)
@@ -45,13 +63,17 @@ export function StoreProvider({ children }) {
   }))
   const [activeWorkout, setActiveWorkout] = useState(() => load(KEYS.activeWorkout, null))
   const [weeklyWeighIns, setWeeklyWeighIns] = useState(() => load(KEYS.weeklyWeighIns, {}))
-  const [weightTargets, setWeightTargets] = useState(() => {
-    const existing = load(KEYS.weightTargets, null)
-    return existing || buildDefaultWeightTargets()
-  })
   const [weeklyNutritionCompliance, setWeeklyNutritionCompliance] = useState(() =>
     load(KEYS.weeklyNutritionCompliance, {})
   )
+  const [weightPhases, setWeightPhases] = useState(() => {
+    const existing = load(KEYS.weightPhases, null)
+    return Array.isArray(existing) ? existing : DEFAULT_WEIGHT_PHASES.map((p) => ({ ...p }))
+  })
+  const [planStartWeight, setPlanStartWeightState] = useState(() => {
+    const existing = load(KEYS.planStartWeight, null)
+    return typeof existing === 'number' ? existing : DEFAULT_PLAN_START_WEIGHT
+  })
 
   // Persist on change.
   useEffect(() => save(KEYS.movements, movements), [movements])
@@ -64,11 +86,12 @@ export function StoreProvider({ children }) {
     else remove(KEYS.activeWorkout)
   }, [activeWorkout])
   useEffect(() => save(KEYS.weeklyWeighIns, weeklyWeighIns), [weeklyWeighIns])
-  useEffect(() => save(KEYS.weightTargets, weightTargets), [weightTargets])
   useEffect(
     () => save(KEYS.weeklyNutritionCompliance, weeklyNutritionCompliance),
     [weeklyNutritionCompliance]
   )
+  useEffect(() => save(KEYS.weightPhases, weightPhases), [weightPhases])
+  useEffect(() => save(KEYS.planStartWeight, planStartWeight), [planStartWeight])
 
   // ---------- Movements ----------
   function createMovement({ name, muscleGroup, defaultRestSeconds }) {
@@ -329,14 +352,44 @@ export function StoreProvider({ children }) {
     })
   }
 
-  function setWeightTarget(dateStr, value) {
+  // ---------- Target phases ----------
+  function setPlanStartWeight(value) {
     const n = Number(value)
     if (value === '' || value === null || value === undefined || Number.isNaN(n)) return
-    setWeightTargets((prev) => ({ ...prev, [dateStr]: n }))
+    setPlanStartWeightState(n)
   }
 
-  function resetWeightTargets() {
-    setWeightTargets(buildDefaultWeightTargets())
+  function addPhase() {
+    setWeightPhases((prev) => {
+      const color = PHASE_COLORS[prev.length % PHASE_COLORS.length]
+      // Default the new phase to the 4 weeks after the last phase's end (or the
+      // upcoming Monday if there are none yet).
+      const last = prev[prev.length - 1]
+      const startMonday = mondayAfter(last ? last.end : todayYMD())
+      const endMonday = addDaysYMD(startMonday, 7 * 4)
+      const phase = {
+        id: uuid(),
+        label: `Phase ${prev.length + 1}`,
+        color,
+        start: startMonday,
+        end: endMonday,
+        weeklyPct: 0,
+      }
+      return [...prev, phase]
+    })
+  }
+
+  function updatePhase(id, patch) {
+    setWeightPhases((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)))
+  }
+
+  function deletePhase(id) {
+    setWeightPhases((prev) => prev.filter((p) => p.id !== id))
+  }
+
+  function resetPhasesToPlan() {
+    setWeightPhases(DEFAULT_WEIGHT_PHASES.map((p) => ({ ...p })))
+    setPlanStartWeightState(DEFAULT_PLAN_START_WEIGHT)
   }
 
   // field is 'calorieDays' or 'proteinDays'. Empty clears just that field; when
@@ -370,6 +423,8 @@ export function StoreProvider({ children }) {
       workouts,
       hypertrophyTargets,
       settings,
+      weightPhases,
+      planStartWeight,
     }
   }
 
@@ -382,6 +437,8 @@ export function StoreProvider({ children }) {
     if (Array.isArray(data.workouts)) setWorkouts(data.workouts)
     if (data.hypertrophyTargets) setHypertrophyTargets(data.hypertrophyTargets)
     if (data.settings) setSettings({ ...DEFAULT_SETTINGS, ...data.settings })
+    if (Array.isArray(data.weightPhases)) setWeightPhases(data.weightPhases)
+    if (typeof data.planStartWeight === 'number') setPlanStartWeightState(data.planStartWeight)
   }
 
   function clearAllData() {
@@ -391,6 +448,8 @@ export function StoreProvider({ children }) {
     setHypertrophyTargets(DEFAULT_TARGETS)
     setSettings(DEFAULT_SETTINGS)
     setActiveWorkout(null)
+    setWeightPhases(DEFAULT_WEIGHT_PHASES.map((p) => ({ ...p })))
+    setPlanStartWeightState(DEFAULT_PLAN_START_WEIGHT)
   }
 
   const value = {
@@ -402,8 +461,9 @@ export function StoreProvider({ children }) {
     settings,
     activeWorkout,
     weeklyWeighIns,
-    weightTargets,
     weeklyNutritionCompliance,
+    weightPhases,
+    planStartWeight,
     muscleGroups: MUSCLE_GROUPS,
     // movements
     createMovement,
@@ -435,9 +495,13 @@ export function StoreProvider({ children }) {
     updateTarget,
     // weight trend
     setWeighIn,
-    setWeightTarget,
-    resetWeightTargets,
     setNutritionDays,
+    // target phases
+    setPlanStartWeight,
+    addPhase,
+    updatePhase,
+    deletePhase,
+    resetPhasesToPlan,
     // data
     exportData,
     importData,

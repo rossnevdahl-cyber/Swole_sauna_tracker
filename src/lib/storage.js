@@ -8,8 +8,10 @@ export const KEYS = {
   activeWorkout: 'sst_activeWorkout',
   // Weight Trend feature — spec-defined key names.
   weeklyWeighIns: 'weeklyWeighIns',
-  weightTargets: 'weightTargets',
   weeklyNutritionCompliance: 'weeklyNutritionCompliance',
+  // Phase-driven target plan.
+  weightPhases: 'weightPhases',
+  planStartWeight: 'planStartWeight',
 }
 
 export const MUSCLE_GROUPS = [
@@ -97,119 +99,120 @@ export function remove(key) {
 // Weight Trend feature
 // ---------------------------------------------------------------------------
 
-// The three prep-cycle phases. Dates are the Monday (YYYY-MM-DD) boundaries.
-// `band` is the chart background tint; `color` is the brighter label/line color.
-export const WEIGHT_PHASES = [
-  {
-    key: 'mini',
-    label: 'Mini Cut',
-    tableLabel: '▼ PHASE 1 — MINI CUT',
-    color: '#FF3B30',
-    band: 'rgba(255, 59, 48, 0.08)',
-    start: '2026-07-06',
-    end: '2026-08-24',
-  },
-  {
-    key: 'bulk',
-    label: 'Lean Bulk',
-    tableLabel: '▲ PHASE 2 — LEAN BULK',
-    color: '#3B82F6',
-    band: 'rgba(59, 130, 246, 0.08)',
-    start: '2026-08-31',
-    end: '2027-02-22',
-  },
-  {
-    key: 'cut',
-    label: 'Comp Cut',
-    tableLabel: '▼ PHASE 3 — COMPETITION CUT',
-    color: '#FB923C',
-    band: 'rgba(251, 146, 60, 0.08)',
-    start: '2027-03-01',
-    end: '2027-08-16',
-  },
-]
-
 // Show date for the prep cycle (vertical marker on the chart).
 export const SHOW_DAY = '2027-08-21'
 
-// Hardcoded target weight curve from the competition prep plan. Each entry is
-// [Monday date string, target lbs]. Ordered chronologically.
-const MINI_CUT = [
-  ['2026-07-06', 187.5],
-  ['2026-07-13', 186.0],
-  ['2026-07-20', 184.5],
-  ['2026-07-27', 183.0],
-  ['2026-08-03', 181.5],
-  ['2026-08-10', 180.0],
-  ['2026-08-17', 179.0],
-  ['2026-08-24', 178.0],
-]
-const LEAN_BULK = [
-  ['2026-08-31', 178.3],
-  ['2026-09-07', 178.6],
-  ['2026-09-14', 178.9],
-  ['2026-09-21', 179.2],
-  ['2026-09-28', 179.5],
-  ['2026-10-05', 179.8],
-  ['2026-10-12', 180.1],
-  ['2026-10-19', 180.4],
-  ['2026-10-26', 180.7],
-  ['2026-11-02', 181.0],
-  ['2026-11-09', 181.3],
-  ['2026-11-16', 181.6],
-  ['2026-11-23', 181.9],
-  ['2026-11-30', 182.2],
-  ['2026-12-07', 182.5],
-  ['2026-12-14', 182.8],
-  ['2026-12-21', 183.1],
-  ['2026-12-28', 183.4],
-  ['2027-01-04', 183.7],
-  ['2027-01-11', 184.0],
-  ['2027-01-18', 184.3],
-  ['2027-01-25', 184.6],
-  ['2027-02-01', 184.8],
-  ['2027-02-08', 185.0],
-  ['2027-02-15', 185.0],
-  ['2027-02-22', 185.0],
-]
-const COMP_CUT = [
-  ['2027-03-01', 184.1],
-  ['2027-03-08', 183.2],
-  ['2027-03-15', 182.3],
-  ['2027-03-22', 181.4],
-  ['2027-03-29', 180.5],
-  ['2027-04-05', 179.6],
-  ['2027-04-12', 178.7],
-  ['2027-04-19', 177.8],
-  ['2027-04-26', 176.9],
-  ['2027-05-03', 176.0],
-  ['2027-05-10', 175.1],
-  ['2027-05-17', 174.2],
-  ['2027-05-24', 173.3],
-  ['2027-05-31', 172.4],
-  ['2027-06-07', 171.5],
-  ['2027-06-14', 170.6],
-  ['2027-06-21', 169.7],
-  ['2027-06-28', 168.8],
-  ['2027-07-05', 167.9],
-  ['2027-07-12', 167.0],
-  ['2027-07-19', 166.1],
-  ['2027-07-26', 165.2],
-  ['2027-08-02', 164.3],
-  ['2027-08-09', 163.4],
-  ['2027-08-16', 162.0],
+// The starting body weight the target curve grows from. The first week of the
+// earliest phase equals this; every later week compounds from it.
+export const DEFAULT_PLAN_START_WEIGHT = 187.5
+
+// Prep-cycle phases. Each phase spans a Monday (YYYY-MM-DD) start/end range and
+// carries a `weeklyPct` — the per-week body-weight change applied while inside
+// that phase (negative = weekly loss, positive = weekly gain). `color` is the
+// label/line color; `band` is the chart background tint derived from it.
+export const DEFAULT_WEIGHT_PHASES = [
+  {
+    id: 'mini',
+    label: 'Mini Cut',
+    color: '#FF3B30',
+    start: '2026-07-06',
+    end: '2026-08-24',
+    weeklyPct: -0.75,
+  },
+  {
+    id: 'bulk',
+    label: 'Lean Bulk',
+    color: '#3B82F6',
+    start: '2026-08-31',
+    end: '2027-02-22',
+    weeklyPct: 0.15,
+  },
+  {
+    id: 'cut',
+    label: 'Comp Cut',
+    color: '#FB923C',
+    start: '2027-03-01',
+    end: '2027-08-16',
+    weeklyPct: -0.53,
+  },
 ]
 
-// Ordered list of every prep-cycle week: { date, target, phaseKey }.
-export const WEIGHT_PLAN = [
-  ...MINI_CUT.map(([date, target]) => ({ date, target, phaseKey: 'mini' })),
-  ...LEAN_BULK.map(([date, target]) => ({ date, target, phaseKey: 'bulk' })),
-  ...COMP_CUT.map(([date, target]) => ({ date, target, phaseKey: 'cut' })),
+// Palette for auto-coloring newly added phases (cycles once exhausted).
+export const PHASE_COLORS = [
+  '#FF3B30',
+  '#3B82F6',
+  '#FB923C',
+  '#22C55E',
+  '#A855F7',
+  '#EAB308',
+  '#14B8A6',
+  '#EC4899',
 ]
 
-// Default weightTargets object keyed by Monday date string.
-export function buildDefaultWeightTargets() {
-  const out = {}
-  for (const { date, target } of WEIGHT_PLAN) out[date] = target
-  return out
+// Derive the faint chart band tint (rgba, alpha 0.08) from a phase color.
+export function bandFromColor(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim())
+  if (!m) return 'rgba(200, 255, 0, 0.08)'
+  const int = parseInt(m[1], 16)
+  const r = (int >> 16) & 255
+  const g = (int >> 8) & 255
+  const b = int & 255
+  return `rgba(${r}, ${g}, ${b}, 0.08)`
+}
+
+// Local-midnight parse / format for 'YYYY-MM-DD' strings (avoids UTC drift).
+// Duplicated from utils.js so storage stays dependency-free.
+function ymdToDate(s) {
+  const [y, m, d] = s.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+function dateToYmd(date) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+// Snap a Date to the Monday that starts its week.
+function mondayOf(date) {
+  const d = new Date(date)
+  d.setHours(0, 0, 0, 0)
+  const day = d.getDay() // 0 = Sun
+  d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day))
+  return d
+}
+
+// Compute the ordered target-weight plan from a start weight + phase list.
+// Walks every Monday covered by the phases in chronological order; the first
+// week equals `planStartWeight` and each subsequent week compounds by the
+// weekly percentage of the phase that contains it. Returns
+// `[{ date, target, phaseKey }]` — the same shape the chart/table consume.
+export function computeWeightPlan(planStartWeight, phases) {
+  const valid = (phases || [])
+    .filter((p) => p && p.start && p.end)
+    .sort((a, b) => a.start.localeCompare(b.start))
+
+  // Ordered, de-duplicated list of { date, phase } — one entry per week.
+  const seen = new Set()
+  const seq = []
+  for (const p of valid) {
+    const last = mondayOf(ymdToDate(p.end))
+    const cur = mondayOf(ymdToDate(p.start))
+    while (cur <= last) {
+      const ymd = dateToYmd(cur)
+      if (!seen.has(ymd)) {
+        seen.add(ymd)
+        seq.push({ date: ymd, phase: p })
+      }
+      cur.setDate(cur.getDate() + 7)
+    }
+  }
+
+  const base = Number(planStartWeight)
+  let prev = Number.isFinite(base) ? base : 0
+  return seq.map((w, i) => {
+    const pct = Number(w.phase.weeklyPct) || 0
+    const raw = i === 0 ? prev : prev * (1 + pct / 100)
+    prev = raw
+    return { date: w.date, target: Math.round(raw * 10) / 10, phaseKey: w.phase.id }
+  })
 }

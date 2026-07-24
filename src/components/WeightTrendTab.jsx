@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../context/StoreContext.jsx'
-import { WEIGHT_PLAN, WEIGHT_PHASES, SHOW_DAY } from '../lib/storage.js'
+import { computeWeightPlan, bandFromColor, SHOW_DAY } from '../lib/storage.js'
 import { parseYMD, toYMD, fmtWeekLabel, startOfWeek } from '../lib/utils.js'
-import { ConfirmModal } from './Modal.jsx'
+import Modal, { ConfirmModal } from './Modal.jsx'
 
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-const PHASE_BY_KEY = Object.fromEntries(WEIGHT_PHASES.map((p) => [p.key, p]))
+
+// A small directional glyph for a phase, based on its weekly change.
+function phaseArrow(weeklyPct) {
+  const n = Number(weeklyPct) || 0
+  if (n < 0) return '▼'
+  if (n > 0) return '▲'
+  return '■'
+}
 
 // Chart geometry (SVG user units).
 const COL_W = 46
@@ -38,21 +45,26 @@ function nutColor(v) {
 export default function WeightTrendTab() {
   const {
     weeklyWeighIns,
-    weightTargets,
     weeklyNutritionCompliance,
+    weightPhases,
+    planStartWeight,
     setWeighIn,
-    setWeightTarget,
-    resetWeightTargets,
     setNutritionDays,
   } = useStore()
 
   const hasWeighIns = Object.keys(weeklyWeighIns).length > 0
   const hasNutrition = Object.keys(weeklyNutritionCompliance).length > 0
 
+  // Target weight per week, derived from the phase list + plan start weight.
+  const plan = useMemo(
+    () => computeWeightPlan(planStartWeight, weightPhases),
+    [planStartWeight, weightPhases]
+  )
+
   // Pre-compute the full chart data array once per data change (perf note).
   const chart = useMemo(() => {
-    const weeks = WEIGHT_PLAN.map((w) => {
-      const target = weightTargets[w.date] ?? w.target
+    const weeks = plan.map((w) => {
+      const target = w.target
       const raw = weeklyWeighIns[w.date]
       const actual = typeof raw === 'number' ? raw : null
       const nut = weeklyNutritionCompliance[w.date] || null
@@ -60,6 +72,25 @@ export default function WeightTrendTab() {
       const protein = nut && typeof nut.proteinDays === 'number' ? nut.proteinDays : null
       return { date: w.date, phaseKey: w.phaseKey, target, actual, cals, protein }
     })
+
+    // No phases → nothing to plot. Return a safe empty shape.
+    if (weeks.length === 0) {
+      return {
+        weeks: [],
+        ticks: [],
+        yMin: 0,
+        yMax: 0,
+        width: 0,
+        x: () => 0,
+        y: () => 0,
+        targetPoints: '',
+        actualRuns: [],
+        actualDots: [],
+        bands: [],
+        monthLabels: [],
+        showX: null,
+      }
+    }
 
     // Y range: auto-fit with ~5lb padding, snapped to 5lb increments.
     let lo = Infinity
@@ -100,16 +131,22 @@ export default function WeightTrendTab() {
     const actualDots = actualRuns.flat()
 
     // Phase background bands + labels.
-    const bands = WEIGHT_PHASES.map((p) => {
-      const idxs = weeks.map((w, i) => (w.phaseKey === p.key ? i : -1)).filter((i) => i >= 0)
-      const first = idxs[0]
-      const last = idxs[idxs.length - 1]
-      return {
-        ...p,
-        x: x(first) - COL_W / 2,
-        w: x(last) - x(first) + COL_W,
-      }
-    })
+    const bands = weightPhases
+      .map((p) => {
+        const idxs = weeks.map((w, i) => (w.phaseKey === p.id ? i : -1)).filter((i) => i >= 0)
+        if (!idxs.length) return null
+        const first = idxs[0]
+        const last = idxs[idxs.length - 1]
+        return {
+          key: p.id,
+          label: p.label,
+          color: p.color,
+          band: bandFromColor(p.color),
+          x: x(first) - COL_W / 2,
+          w: x(last) - x(first) + COL_W,
+        }
+      })
+      .filter(Boolean)
 
     // Month labels at month boundaries (readable interval for mobile).
     const monthLabels = []
@@ -155,17 +192,16 @@ export default function WeightTrendTab() {
       monthLabels,
       showX,
     }
-  }, [weeklyWeighIns, weightTargets, weeklyNutritionCompliance])
+  }, [plan, weeklyWeighIns, weeklyNutritionCompliance, weightPhases])
 
   return (
     <div>
-      <Chart chart={chart} hasNutrition={hasNutrition} />
+      {chart.weeks.length > 0 && <Chart chart={chart} hasNutrition={hasNutrition} />}
       <TargetsTable
         chart={chart}
+        phases={weightPhases}
         hasWeighIns={hasWeighIns}
         setWeighIn={setWeighIn}
-        setWeightTarget={setWeightTarget}
-        resetWeightTargets={resetWeightTargets}
         setNutritionDays={setNutritionDays}
       />
     </div>
@@ -471,17 +507,12 @@ function Chart({ chart, hasNutrition }) {
   )
 }
 
-function TargetsTable({
-  chart,
-  hasWeighIns,
-  setWeighIn,
-  setWeightTarget,
-  resetWeightTargets,
-  setNutritionDays,
-}) {
+function TargetsTable({ chart, phases, hasWeighIns, setWeighIn, setNutritionDays }) {
+  const { resetPhasesToPlan } = useStore()
   const [editing, setEditing] = useState(null) // { date, field }
   const [draft, setDraft] = useState('')
   const [confirmReset, setConfirmReset] = useState(false)
+  const [showEditor, setShowEditor] = useState(false)
   const todayWeek = toYMD(startOfWeek(new Date()))
 
   // Reverse-chronological rows, with a phase header above each phase's weeks.
@@ -491,13 +522,14 @@ function TargetsTable({
     for (const w of chart.weeks) {
       ;(byPhase[w.phaseKey] ||= []).push(w)
     }
-    for (const p of [...WEIGHT_PHASES].reverse()) {
-      const weeks = byPhase[p.key] || []
+    for (const p of [...phases].reverse()) {
+      const weeks = byPhase[p.id] || []
+      if (!weeks.length) continue
       out.push({ type: 'header', phase: p })
       for (let i = weeks.length - 1; i >= 0; i--) out.push({ type: 'week', ...weeks[i] })
     }
     return out
-  }, [chart.weeks])
+  }, [chart.weeks, phases])
 
   function startEdit(date, field, current) {
     setEditing({ date, field })
@@ -508,7 +540,6 @@ function TargetsTable({
     if (!editing) return
     const v = draft.trim()
     if (editing.field === 'actual') setWeighIn(editing.date, v)
-    else if (editing.field === 'target') setWeightTarget(editing.date, v)
     else if (editing.field === 'cals') setNutritionDays(editing.date, 'calorieDays', v)
     else if (editing.field === 'protein') setNutritionDays(editing.date, 'proteinDays', v)
     setEditing(null)
@@ -531,22 +562,32 @@ function TargetsTable({
     <div>
       <div className="flex items-center justify-between mb-2">
         <h2 className="heading text-xl">Weekly Log</h2>
-        <button
-          onClick={() => setConfirmReset(true)}
-          className="font-display font-bold uppercase tracking-wide text-xs px-3 h-9 bg-surface2 text-muted active:text-ink"
-        >
-          Reset to Plan
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowEditor(true)}
+            className="font-display font-bold uppercase tracking-wide text-xs px-3 h-9 bg-accent text-black active:opacity-80"
+          >
+            Edit Phases
+          </button>
+          <button
+            onClick={() => setConfirmReset(true)}
+            className="font-display font-bold uppercase tracking-wide text-xs px-3 h-9 bg-surface2 text-muted active:text-ink"
+          >
+            Reset to Plan
+          </button>
+        </div>
       </div>
 
       <ConfirmModal
         open={confirmReset}
         onClose={() => setConfirmReset(false)}
-        title="Reset Targets"
-        message="Reset all targets to original plan values? This cannot be undone."
+        title="Reset Phases"
+        message="Reset all phases and the start weight to the original plan? This cannot be undone."
         confirmLabel="Reset"
-        onConfirm={resetWeightTargets}
+        onConfirm={resetPhasesToPlan}
       />
+
+      <PhaseEditor open={showEditor} onClose={() => setShowEditor(false)} />
 
       {!hasWeighIns && (
         <p className="text-xs text-muted mb-2">
@@ -571,11 +612,11 @@ function TargetsTable({
           if (row.type === 'header') {
             return (
               <div
-                key={`h-${row.phase.key}`}
+                key={`h-${row.phase.id}`}
                 className="px-3 py-2 bg-bg border-t border-surface2 font-display font-bold uppercase tracking-wide text-xs"
                 style={{ color: row.phase.color }}
               >
-                {row.phase.tableLabel}
+                {phaseArrow(row.phase.weeklyPct)} {row.phase.label}
               </div>
             )
           }
@@ -597,28 +638,8 @@ function TargetsTable({
                 {fmtWeekLabel(row.date)}
               </span>
 
-              {/* Target (editable) */}
-              <span className="w-16 text-right">
-                {editing && editing.date === row.date && editing.field === 'target' ? (
-                  <input
-                    autoFocus
-                    type="number"
-                    inputMode="decimal"
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onBlur={commit}
-                    onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-                    className="num-input w-14 h-9 px-1 text-right"
-                  />
-                ) : (
-                  <button
-                    onClick={() => startEdit(row.date, 'target', target)}
-                    className="w-14 h-9 text-right text-muted active:text-ink"
-                  >
-                    {target.toFixed(1)}
-                  </button>
-                )}
-              </span>
+              {/* Target (computed from phases) */}
+              <span className="w-16 text-right text-muted">{target.toFixed(1)}</span>
 
               {/* Actual (editable) */}
               <span className="w-16 text-right">
@@ -706,5 +727,137 @@ function NutCell({ value, editing, draft, setDraft, commit, onStart }) {
         </button>
       )}
     </span>
+  )
+}
+
+// A numeric input that keeps its own draft while focused so mid-typing states
+// (empty, a lone '-', a trailing '.') don't get clobbered by the stored value.
+// Commits the raw string to `onCommit` on blur.
+function NumInput({ value, onCommit, className, step, placeholder }) {
+  const [draft, setDraft] = useState(value == null ? '' : String(value))
+  const [focused, setFocused] = useState(false)
+  useEffect(() => {
+    if (!focused) setDraft(value == null ? '' : String(value))
+  }, [value, focused])
+  return (
+    <input
+      type="number"
+      inputMode="decimal"
+      step={step}
+      placeholder={placeholder}
+      className={className}
+      value={draft}
+      onFocus={() => setFocused(true)}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        setFocused(false)
+        onCommit(draft.trim())
+      }}
+    />
+  )
+}
+
+// Modal for building the target-weight plan: one plan start weight plus an
+// ordered, editable list of phases (start date, end date, weekly %). Targets
+// are recomputed from these — this modal never touches the chart or the other
+// columns directly.
+function PhaseEditor({ open, onClose }) {
+  const { planStartWeight, weightPhases, setPlanStartWeight, addPhase, updatePhase, deletePhase } =
+    useStore()
+
+  return (
+    <Modal open={open} onClose={onClose} title="Edit Phases">
+      <div className="p-4 space-y-4">
+        <div>
+          <label className="block text-[10px] uppercase tracking-wide text-muted mb-1">
+            Plan Start Weight (lbs)
+          </label>
+          <NumInput
+            value={planStartWeight}
+            step="0.1"
+            onCommit={(v) => setPlanStartWeight(v)}
+            className="num-input w-28 h-10 px-2 text-left"
+          />
+          <p className="text-[11px] text-muted mt-1">
+            The first week grows from this weight; every later week compounds by its phase's weekly
+            percentage.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          {weightPhases.length === 0 && (
+            <p className="text-sm text-muted">
+              No phases yet. Add one to start building your target curve.
+            </p>
+          )}
+          {weightPhases.map((p, i) => (
+            <div key={p.id} className="bg-surface2 p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="inline-block w-3 h-3 shrink-0" style={{ background: p.color }} />
+                <input
+                  value={p.label}
+                  onChange={(e) => updatePhase(p.id, { label: e.target.value })}
+                  className="flex-1 bg-surface text-ink px-2 h-9 focus:outline-none focus:ring-2 focus:ring-accent"
+                  placeholder={`Phase ${i + 1}`}
+                />
+                <button
+                  onClick={() => deletePhase(p.id)}
+                  className="text-danger/80 active:text-danger text-xs font-display font-bold uppercase px-2 h-9"
+                >
+                  Delete
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <label className="flex flex-col text-[10px] uppercase tracking-wide text-muted">
+                  Start (Mon)
+                  <input
+                    type="date"
+                    value={p.start}
+                    onChange={(e) =>
+                      e.target.value &&
+                      updatePhase(p.id, { start: toYMD(startOfWeek(parseYMD(e.target.value))) })
+                    }
+                    className="bg-surface text-ink px-2 h-9 mt-1 focus:outline-none focus:ring-2 focus:ring-accent"
+                  />
+                </label>
+                <label className="flex flex-col text-[10px] uppercase tracking-wide text-muted">
+                  End (Mon)
+                  <input
+                    type="date"
+                    value={p.end}
+                    onChange={(e) =>
+                      e.target.value &&
+                      updatePhase(p.id, { end: toYMD(startOfWeek(parseYMD(e.target.value))) })
+                    }
+                    className="bg-surface text-ink px-2 h-9 mt-1 focus:outline-none focus:ring-2 focus:ring-accent"
+                  />
+                </label>
+                <label className="flex flex-col text-[10px] uppercase tracking-wide text-muted">
+                  Weekly %
+                  <NumInput
+                    value={p.weeklyPct}
+                    step="0.05"
+                    onCommit={(v) => {
+                      const n = Number(v)
+                      updatePhase(p.id, { weeklyPct: v === '' || !Number.isFinite(n) ? 0 : n })
+                    }}
+                    className="num-input w-20 h-9 px-2 mt-1 text-left"
+                  />
+                </label>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <button onClick={addPhase} className="btn-ghost w-full">
+          + Add Phase
+        </button>
+
+        <p className="text-[11px] text-muted">
+          Negative weekly % = weekly loss, positive = weekly gain. Dates snap to the Monday that
+          starts each week, and phases run back-to-back from the plan start weight.
+        </p>
+      </div>
+    </Modal>
   )
 }
